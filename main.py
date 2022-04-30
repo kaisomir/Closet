@@ -23,7 +23,6 @@ owner = bot.owner_id
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.id} ({bot.user.name}#{bot.user.discriminator})')
-    print([guild.id for guild in bot.guilds])
     for guild in bot.guilds:
         path = f'{filestruct}{guild.id}'
         if not os.path.exists(path):
@@ -57,22 +56,60 @@ async def on_guild_remove(guild: discord.Guild):
 
 
 @bot.slash_command(name='modify',
-                   description=responses.DESC_MODIFY,
-                   guild_ids=[guild.id for guild in bot.guilds]
+                   description=responses.DESC_MODIFY
                    )
 async def modify(ctx: discord.ApplicationContext,
                  role: discord.Option(discord.Role, 'Role to be modified', name='role'),
-                 property: discord.Option(str, 'Property to modify', name='property', choices=['icon', 'colour'])
+                 property: discord.Option(str, 'Property to modify', name='property', choices=['icon', 'colour']),
+                 value: discord.Option(str, 'Value to set property to', name='value')
                  ):
-    guild = ctx.interaction.guild
-    with open(f'{filestruct}{guild.id}/roles.json') as file:
+    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
+    try:
+        if not data[str(role.id)] == ctx.interaction.user.id:
+            await ctx.respond('You are not this role\'s owner!', ephemeral=True)
+            return
+    except KeyError:
+        await ctx.respond('This role has not yet been configured.', ephemeral=True)
+        return
+    if property == 'colour':
+        if len(value) == 6:  # hex
+            try:
+                await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[3:5:], 16), b=int(value[4:6:], 16)))
+                await ctx.respond('Colour changed!', ephemeral=True)
+            except discord.errors.Forbidden:
+                await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+                return
+        else:
+            rgb = value.split(' ')
+            try:
+                for index, val in enumerate(rgb):
+                    rgb[index] = int(val)
+            except ValueError:
+                rgb = value.split(', ')
+                try:
+                    for index, val in enumerate(rgb):
+                        rgb[index] = int(val)
+                except ValueError:
+                    rgb = value.split(',')
+                    try:
+                        for index, val in enumerate(rgb):
+                            rgb[index] = int(val)
+                    except ValueError:
+                        await ctx.respond('Invalid RGB colour code. Use either hex (without leading #) or RGB separated by `` ``, ``, ``, or ``,``.', ephemeral=True)
+            try:
+                await role.edit(colour=discord.Colour.from_rgb(r=value[0:2:], g=value[3:5:], b=value[4:6:]))
+                await ctx.respond('Colour changed!', ephemeral=True)
+                return
+            except discord.errors.Forbidden:
+                await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+    if property == 'icon':
+        pass  # need to check for 256kb, url, etc.
     return
 
 
 @bot.slash_command(name='add_role',
-                   description=responses.DESC_ADDROLE,
-                   guild_ids=[guild.id for guild in bot.guilds]
+                   description=responses.DESC_ADDROLE
                    )
 async def add_role(ctx: discord.ApplicationContext,
                    role: discord.Option(discord.Role, 'Role to be added', name='role'),
@@ -97,8 +134,7 @@ async def add_role(ctx: discord.ApplicationContext,
 
 
 @bot.slash_command(name='remove_role',
-                   description=responses.DESC_DELROLE,
-                   guild_ids=[guild.id for guild in bot.guilds]
+                   description=responses.DESC_DELROLE
                    )
 async def remove_role(ctx: discord.ApplicationContext,
                       role: discord.Option(discord.Role, 'Role to be added', name='role')
@@ -108,7 +144,7 @@ async def remove_role(ctx: discord.ApplicationContext,
         return
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
         data = json.loads(file.read())
-    data.pop(data[role.id])
+    data.pop(data[str(role.id)])
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
         file.write(json.dumps(data))
 
