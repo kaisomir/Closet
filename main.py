@@ -140,8 +140,8 @@ async def change_icon(ctx: discord.ApplicationContext,
         return
     except Exception as e:
         await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
-    if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp']:
-        await ctx.respond('Images must be jp(e)g, png, or webp.')
+    if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/'):
+        await ctx.respond('Images must be jp(e)g, png, or webp and hosted on Discord.')
         return
     with requests.get(value) as file:
         if len(file.content) > 256000:
