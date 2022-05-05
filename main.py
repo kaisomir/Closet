@@ -1,9 +1,10 @@
 import discord
 import json
-import desc
+import requests
 import os
 import shutil
-import urllib.request
+
+import vanitybot_descriptions
 
 try:
     with open('config.json', 'r') as file:
@@ -15,6 +16,8 @@ except FileNotFoundError:
     quit()
 except KeyError as e:
     print(f'The required variable {e} has an invalid name.')
+except Exception as e:
+    print(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
 
 intents = discord.Intents.default()
 bot = discord.Bot(intents=intents)
@@ -34,6 +37,10 @@ async def on_ready():
             masters = open(f'{path}/masters.json', 'x+')
             roles.write('{}')
             masters.close()
+    logged_guilds = [x for x in next(os.walk('.'))[1] if x.isnumeric()]
+    for guild in logged_guilds:
+        if guild not in [guild.id for guild in bot.guilds]:
+            shutil.rmtree('./' + guild)
 
 
 @bot.event
@@ -57,11 +64,11 @@ async def on_guild_remove(guild: discord.Guild):
 
 
 @bot.slash_command(name='change_colour',
-                   description=desc.DESC_MODIFY
+                   description=vanitybot_descriptions.DESC_COLOUR
                    )
 async def change_colour(ctx: discord.ApplicationContext,
                         role: discord.Option(discord.Role, 'Role to be modified', name='role'),
-                        value: discord.Option(str, 'Role colour to be set', name='value')
+                        value: discord.Option(str, 'Role colour to be set', name='colour')
                         ):
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
@@ -72,12 +79,17 @@ async def change_colour(ctx: discord.ApplicationContext,
     except KeyError:
         await ctx.respond('This role has not (yet) been configured.', ephemeral=True)
         return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
     if len(value) == 6:  # hex
         try:
             await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[3:5:], 16), b=int(value[4:6:], 16)))
             await ctx.respond('Colour changed!', ephemeral=True)
         except discord.errors.Forbidden:
             await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+            return
+        except Exception as e:
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
             return
     else:
         rgb = value.split(' ')
@@ -105,15 +117,17 @@ async def change_colour(ctx: discord.ApplicationContext,
             return
         except discord.errors.Forbidden:
             await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+        except Exception as e:
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
     return
 
 
 @bot.slash_command(name='change_icon',
-                   description=desc.DESC_MODIFY
+                   description=vanitybot_descriptions.DESC_ICON
                    )
 async def change_icon(ctx: discord.ApplicationContext,
                       role: discord.Option(discord.Role, 'Role to be modified', name='role'),
-                      value: discord.Option(str, 'Emoji or link to image to set role icon to', name='value')
+                      value: discord.Option(str, 'Emoji or link to image to set role icon to', name='icon')
                       ):
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
@@ -124,20 +138,28 @@ async def change_icon(ctx: discord.ApplicationContext,
     except KeyError:
         await ctx.respond('This role has not (yet) been configured.', ephemeral=True)
         return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
     if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp']:
         await ctx.respond('Images must be jp(e)g, png, or webp.')
         return
-    try:
-        await role.edit(colour=discord.Colour.from_rgb(r=value[0:2:], g=value[3:5:], b=value[4:6:]))
-        await ctx.respond('Colour changed!', ephemeral=True)
-        return
-    except discord.errors.Forbidden:
-        await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+    with requests.get(value) as file:
+        if len(file.content) > 256000:
+            await ctx.respond('Image is too large - role icons must be 256kb or lower.', ephemeral=True)
+            return
+        try:
+            await role.edit(icon=file.content)
+            await ctx.respond('Colour changed!', ephemeral=True)
+            return
+        except discord.errors.Forbidden:
+            await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
+        except Exception as e:
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
     return
 
 
 @bot.slash_command(name='add_role',
-                   description=desc.DESC_ADDROLE
+                   description=vanitybot_descriptions.DESC_ADDROLE
                    )
 async def add_role(ctx: discord.ApplicationContext,
                    role: discord.Option(discord.Role, 'Role to be added', name='role'),
@@ -159,10 +181,13 @@ async def add_role(ctx: discord.ApplicationContext,
             file.write(json.dumps(data))
         await ctx.respond('Role configured!')
         return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
+        return
 
 
 @bot.slash_command(name='remove_role',
-                   description=desc.DESC_DELROLE
+                   description=vanitybot_descriptions.DESC_DELROLE
                    )
 async def remove_role(ctx: discord.ApplicationContext,
                       role: discord.Option(discord.Role, 'Role to be added', name='role')
