@@ -83,7 +83,7 @@ async def change_colour(ctx: discord.ApplicationContext,
     if not data[str(role.id)]['colour']:
         await ctx.respond('This role\'s colour can\'t be changed.', ephemeral=True)
         return
-    if len(value) == 6:  # hex
+    if len(value) == 6 and ',' not in value and ' ' not in value:  # hex
         try:
             await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[3:5:], 16), b=int(value[4:6:], 16)))
             await ctx.respond('Colour changed!', ephemeral=True)
@@ -94,30 +94,13 @@ async def change_colour(ctx: discord.ApplicationContext,
             await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
             return
     else:
-        rgb = value.split(' ')
+        import re
+        rgb = re.findall(r'\b\d{1,3}\b', value)
+        if len(rgb) != 3:
+            await ctx.respond('Invalid RGB colour code. Use either hex (without leading #) or RGB separated by `` ``, ``, ``, or ``,``.', ephemeral=True)
+            return
         try:
-            for index, val in enumerate(rgb):
-                rgb[index] = int(val)
-            if len(rgb) != 3:
-                raise ValueError
-        except ValueError:
-            rgb = value.split(', ')
-            try:
-                for index, val in enumerate(rgb):
-                    rgb[index] = int(val)
-                if len(rgb) != 3:
-                    raise ValueError
-            except ValueError:
-                rgb = value.split(',')
-                try:
-                    for index, val in enumerate(rgb):
-                        rgb[index] = int(val)
-                    if len(rgb) != 3:
-                        raise ValueError
-                except ValueError:
-                    await ctx.respond('Invalid RGB colour code. Use either hex (without leading #) or RGB separated by `` ``, ``, ``, or ``,``.', ephemeral=True)
-        try:
-            await role.edit(colour=discord.Colour.from_rgb(r=value[0:2:], g=value[3:5:], b=value[4:6:]))
+            await role.edit(colour=discord.Colour.from_rgb(r=int(rgb[0]), g=int(rgb[1]), b=int(rgb[2])))
             await ctx.respond('Colour changed!', ephemeral=True)
             return
         except discord.errors.Forbidden:
