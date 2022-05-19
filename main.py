@@ -16,8 +16,10 @@ except FileNotFoundError:
     quit()
 except KeyError as e:
     print(f'The required variable {e} has an invalid name.')
+    quit()
 except Exception as e:
     print(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
+    quit()
 
 intents = discord.Intents.default()
 bot = discord.Bot(intents=intents)
@@ -27,6 +29,7 @@ owner = bot.owner_id
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.id} ({bot.user.name}#{bot.user.discriminator})')
+    # added to server whilst offline
     for guild in bot.guilds:
         path = f'{filestruct}{guild.id}'
         if not os.path.exists(path):
@@ -35,11 +38,12 @@ async def on_ready():
             roles.write('{}')
             roles.close()
             masters = open(f'{path}/masters.json', 'x+')
-            roles.write('{}')
+            masters.write('{}')
             masters.close()
+    # removed from server whilst offline
     logged_guilds = [x for x in next(os.walk('.'))[1] if x.isnumeric()]
     for guild in logged_guilds:
-        if guild not in [guild.id for guild in bot.guilds]:
+        if guild not in [str(guild.id) for guild in bot.guilds]:
             shutil.rmtree('./' + guild)
 
 
@@ -67,20 +71,24 @@ async def on_guild_remove(guild: discord.Guild):
                    description=vanitybot_descriptions.DESC_COLOUR
                    )
 async def change_colour(ctx: discord.ApplicationContext,
-                        role: discord.Option(discord.Role, 'Role to be modified', name='role'),
-                        value: discord.Option(str, 'Role colour to be set', name='colour')
+                        role: discord.Role = discord.Option(discord.Role, 'Role to be modified', name='role'),
+                        value: str = discord.Option(str, 'Role colour to be set', name='colour')
                         ):
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
     try:
-        if not data[str(role.id)] == ctx.interaction.user.id:
-            await ctx.respond('You are not this role\'s owner!', ephemeral=True)
+        if ctx.interaction.user.id not in data[str(role.id)]['owners']:
+            await ctx.respond('You are not authorised to manage this role!', ephemeral=True)
             return
     except KeyError:
         await ctx.respond('This role has not (yet) been configured.', ephemeral=True)
         return
     except Exception as e:
-        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+    if not data[str(role.id)]['colour']:
+        await ctx.respond('This role\'s colour can\'t be changed.', ephemeral=True)
+        return
     if len(value) == 6:  # hex
         try:
             await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[3:5:], 16), b=int(value[4:6:], 16)))
@@ -89,26 +97,29 @@ async def change_colour(ctx: discord.ApplicationContext,
             await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
             return
         except Exception as e:
-            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
             return
     else:
         rgb = value.split(' ')
         try:
             for index, val in enumerate(rgb):
                 rgb[index] = int(val)
-            if len(rgb) != 3: raise ValueError
+            if len(rgb) != 3:
+                raise ValueError
         except ValueError:
             rgb = value.split(', ')
             try:
                 for index, val in enumerate(rgb):
                     rgb[index] = int(val)
-                if len(rgb) != 3: raise ValueError
+                if len(rgb) != 3:
+                    raise ValueError
             except ValueError:
                 rgb = value.split(',')
                 try:
                     for index, val in enumerate(rgb):
                         rgb[index] = int(val)
-                    if len(rgb) != 3: raise ValueError
+                    if len(rgb) != 3:
+                        raise ValueError
                 except ValueError:
                     await ctx.respond('Invalid RGB colour code. Use either hex (without leading #) or RGB separated by `` ``, ``, ``, or ``,``.', ephemeral=True)
         try:
@@ -117,30 +128,38 @@ async def change_colour(ctx: discord.ApplicationContext,
             return
         except discord.errors.Forbidden:
             await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
+            return
         except Exception as e:
-            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
-    return
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+            return
 
 
 @bot.slash_command(name='change_icon',
                    description=vanitybot_descriptions.DESC_ICON
                    )
 async def change_icon(ctx: discord.ApplicationContext,
-                      role: discord.Option(discord.Role, 'Role to be modified', name='role'),
-                      value: discord.Option(str, 'Emoji or link to image to set role icon to', name='icon')
+                      role: discord.Role = discord.Option(discord.Role, 'Role to be modified', name='role'),
+                      value: str = discord.Option(str, 'Emoji or link to image to set role icon to', name='icon')
                       ):
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
     try:
-        if not data[str(role.id)] == ctx.interaction.user.id:
-            await ctx.respond('You are not this role\'s owner!', ephemeral=True)
+        if ctx.interaction.user.id not in data[str(role.id)]['owners']:
+            await ctx.respond('You are not authorised to manage this role!', ephemeral=True)
             return
     except KeyError:
         await ctx.respond('This role has not (yet) been configured.', ephemeral=True)
         return
     except Exception as e:
-        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
-    if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/'):
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+    if not data[str(role.id)]['icon']:
+        await ctx.respond('This role\'s icon can\'t be changed.', ephemeral=True)
+        return
+    if ctx.interaction.guild.emoji_limit < 150:
+        await ctx.respond('This server doesn\'t have role icons unlocked.', ephemeral=True)
+        return
+    if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/')):
         await ctx.respond('Images must be jp(e)g, png, or webp and hosted on Discord.')
         return
     with requests.get(value) as file:
@@ -153,36 +172,163 @@ async def change_icon(ctx: discord.ApplicationContext,
             return
         except discord.errors.Forbidden:
             await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
+            return
         except Exception as e:
-            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
-    return
+            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+            return
+
+
+@bot.slash_command(name='change_name',
+                   description='Change a vanity role\'s name.'
+                   )
+async def change_name(ctx: discord.ApplicationContext,
+                      role: discord.Role = discord.Option(discord.Role, 'Role to change name of.', name='role'),
+                      name: str = discord.Option(str, 'Text to set as role name.')
+                      ):
+    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
+        data = json.loads(file.read())
+    try:
+        if ctx.interaction.user.id not in data[str(role.id)]['owners']:
+            await ctx.respond('You are not authorised to manage this role!', ephemeral=True)
+            return
+    except KeyError:
+        await ctx.respond('This role has not (yet) been configured.', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+    if not data[str(role.id)]['name']:
+        await ctx.respond('This role\'s name can\'t be changed.', ephemeral=True)
+        return
+    if len(name) > 100:
+        await ctx.respond('Role name must be 100 characters or shorter.')
+        return
+    try:
+        await role.edit(name=name)
+        await ctx.respond('Colour changed!', ephemeral=True)
+        return
+    except discord.errors.Forbidden:
+        await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+
+
+@bot.slash_command(name='role_permissions',
+                   description=vanitybot_descriptions.DESC_ROLEPERMS
+                   )
+async def role_permissions(ctx: discord.ApplicationContext,
+                           role: discord.Role = discord.Option(discord.Role, 'Role to change permissions of.', name='role'),
+                           permission: str = discord.Option(str, 'Permission to be changed', name='permission', choices=['colour', 'icon', 'name']),
+                           setting: bool = discord.Option(bool, 'Permission allowed or not?', name='setting')
+                           ):
+    if not master_perms(ctx, role):
+        await ctx.respond('You are not authorised to configure vanity roles!', ephemeral=True)
+        return
+    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
+        data = json.loads(file.read())
+    try:
+        data[str(role.id)][permission] = setting
+        with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
+            file.write(json.dumps(data))
+        await ctx.respond(f'Role\'s {permission} can now be changed.', ephemeral=True) if setting else await ctx.respond(f'Role\'s {permission} can no longer be changed.', ephemeral=True)
+    except KeyError:
+        await ctx.respond('This role has not been configured!', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
 
 
 @bot.slash_command(name='add_role',
                    description=vanitybot_descriptions.DESC_ADDROLE
                    )
 async def add_role(ctx: discord.ApplicationContext,
-                   role: discord.Option(discord.Role, 'Role to be added', name='role'),
-                   owner: discord.Option(discord.User, 'User to whom the role belongs', name='owner')
+                   role: discord.Role = discord.Option(discord.Role, 'Role to be added', name='role'),
+                   owner: discord.User = discord.Option(discord.User, 'User to whom the role belongs', name='owner')
                    ):
     if not master_perms(ctx, role):
         await ctx.respond('You are not authorised to configure vanity roles!', ephemeral=True)
         return
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
         data = json.loads(file.read())
-        print(data)
     try:
         data[str(role.id)]
         await ctx.respond('This role has already been configured!')
         return
     except KeyError:
-        data[role.id] = owner.id
+        data[role.id] = {}
+        data[role.id]['owners'] = [owner.id]
+        data[role.id]['colour'] = True
+        data[role.id]['icon'] = True
+        data[role.id]['name'] = False
         with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
             file.write(json.dumps(data))
         await ctx.respond('Role configured!')
         return
     except Exception as e:
-        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``')
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+
+
+@bot.slash_command(name='add_owner',
+                   description=vanitybot_descriptions.DESC_ADDOWNER
+                   )
+async def add_owner(ctx: discord.ApplicationContext,
+                    role: discord.Role = discord.Option(discord.Role, 'Role to add owner to.', name='role'),
+                    user: discord.User = discord.Option(discord.User, 'User to add to role.', name='user')
+                    ):
+    if not master_perms(ctx, role):
+        await ctx.respond('You are not authorised to configure vanity roles!', ephemeral=True)
+        return
+    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
+        data = json.loads(file.read())
+    try:
+        if user.id not in data[str(role.id)]['owners']:
+            data[str(role.id)]['owners'].append(user.id)
+            with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
+                file.write(json.dumps(data))
+            await ctx.respond('User added as owner.', ephemeral=True)
+            return
+        else:
+            await ctx.respond('User is already an owner of this role!', ephemeral=True)
+            return
+    except KeyError:
+        await ctx.respond('This role has not been configured!', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
+
+
+@bot.slash_command(name='remove_owner',
+                   description=vanitybot_descriptions.DESC_DELOWNER
+                   )
+async def remove_owner(ctx: discord.ApplicationContext,
+                       role: discord.Role = discord.Option(discord.Role, 'Role to remove owner from.', name='role'),
+                       user: discord.User = discord.Option(discord.User, 'User to remove from role.', name='user')
+                       ):
+    if not master_perms(ctx, role):
+        await ctx.respond('You are not authorised to configure vanity roles!', ephemeral=True)
+        return
+    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
+        data = json.loads(file.read())
+    try:
+        if user.id in data[str(role.id)]['owners']:
+            data[str(role.id)]['owners'].remove(user.id)
+            with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
+                file.write(json.dumps(data))
+            await ctx.respond('User removed as owner.', ephemeral=True)
+            return
+        else:
+            await ctx.respond('User is not an owner of this role!', ephemeral=True)
+            return
+    except KeyError:
+        await ctx.respond('This role has not been configured!', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
         return
 
 
@@ -190,16 +336,25 @@ async def add_role(ctx: discord.ApplicationContext,
                    description=vanitybot_descriptions.DESC_DELROLE
                    )
 async def remove_role(ctx: discord.ApplicationContext,
-                      role: discord.Option(discord.Role, 'Role to be added', name='role')
+                      role: discord.Role = discord.Option(discord.Role, 'Role to be added', name='role')
                       ):
     if not master_perms(ctx, role):
         await ctx.respond('You are not authorised to configure vanity roles!', ephemeral=True)
         return
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'r') as file:
         data = json.loads(file.read())
-    data.pop(data[str(role.id)])
-    with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
-        file.write(json.dumps(data))
+    try:
+        data.pop(str(role.id))
+        with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
+            file.write(json.dumps(data))
+        await ctx.respond('Role removed.', ephemeral=True)
+        return
+    except KeyError:
+        await ctx.respond('This role has not been configured!', ephemeral=True)
+        return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+        return
 
 
 def master_perms(ctx: discord.ApplicationContext, role: discord.Role):
