@@ -37,9 +37,6 @@ async def on_ready():
             roles = open(f'{path}/roles.json', 'x+')
             roles.write('{}')
             roles.close()
-            masters = open(f'{path}/masters.json', 'x+')
-            masters.write('{}')
-            masters.close()
     # removed from server whilst offline
     logged_guilds = [x for x in next(os.walk('.'))[1] if x.isnumeric()]
     for guild in logged_guilds:
@@ -55,9 +52,6 @@ async def on_guild_join(guild: discord.Guild):
         roles = open(f'{path}/roles.json', 'x+')
         roles.write('{}')
         roles.close()
-        masters = open(f'{path}/masters.json', 'x+')
-        masters.write('{}')
-        masters.close()
 
 
 @bot.event
@@ -372,13 +366,6 @@ def master_perms(ctx: discord.ApplicationContext, role: discord.Role):
         return False
     if (ctx.interaction.user.guild_permissions.manage_roles):
         return True
-    with open(f'{filestruct}{ctx.interaction.guild.id}/masters.json', 'r') as file:
-        masters = json.loads(file.read())
-    if ctx.interaction.user.id in masters['users']:
-        return True
-    for role in ctx.interaction.user.roles:
-        if role.id in masters['roles']:
-            return True
     return False
 
 
