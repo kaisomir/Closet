@@ -85,7 +85,7 @@ async def change_colour(ctx: discord.ApplicationContext,
         return
     if len(value) == 6 and ',' not in value and ' ' not in value:  # hex
         try:
-            await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[3:5:], 16), b=int(value[4:6:], 16)))
+            await role.edit(colour=discord.Colour.from_rgb(r=int(value[0:2:], 16), g=int(value[2:4:], 16), b=int(value[4:6:], 16)))
             await ctx.respond('Colour changed!', ephemeral=True)
         except discord.errors.Forbidden:
             await ctx.respond(f'This bot is not authorised to change {role}\'s colour!', ephemeral=True)
