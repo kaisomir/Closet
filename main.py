@@ -1,5 +1,6 @@
 import discord
 import json
+import re
 import requests
 import os
 import shutil
@@ -94,7 +95,6 @@ async def change_colour(ctx: discord.ApplicationContext,
             await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
             return
     else:
-        import re
         rgb = re.findall(r'\b\d{1,3}\b', value)
         if len(rgb) != 3:
             await ctx.respond('Invalid RGB colour code. Use either hex (without leading #) or RGB separated by `` ``, ``, ``, or ``,``.', ephemeral=True)
@@ -141,6 +141,8 @@ async def change_icon(ctx: discord.ApplicationContext,
         if not data[str(role.id)]['icon']:
             await ctx.respond('This role\'s icon can\'t be changed.', ephemeral=True)
             return
+        if value.startswith('<:'):
+            value = bot.get_emoji(int(re.search(r'\d+', value)[0])).url
         if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/')):
             await ctx.respond('Images must be jp(e)g, png, or webp and hosted on Discord.')
             return
