@@ -344,6 +344,15 @@ async def remove_role(ctx: discord.ApplicationContext,
         return
 
 
+@bot.slash_command(name='role_info',
+                   description='Get a role\'s details'
+                   )
+async def role_info(ctx: discord.ApplicationContext,
+                    role: discord.Role = discord.Option(discord.Role, 'Role to fetch.', name='role')
+                    ):
+    await ctx.respond(embed=discord.Embed(title=role.name, colour=role.colour).set_image(url=role.icon.url).add_field(name="Colour", value=f'#{hex(role.colour.r).lstrip("0x")}{hex(role.colour.g).lstrip("0x")}{hex(role.colour.b).lstrip("0x")} - {role.colour.r}, {role.colour.g}, {role.colour.b}'), ephemeral=True)
+
+
 def master_perms(ctx: discord.ApplicationContext, role: discord.Role):
     if ctx.interaction.user.guild_permissions.administrator:
         return True
