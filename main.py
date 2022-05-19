@@ -153,29 +153,37 @@ async def change_icon(ctx: discord.ApplicationContext,
     except Exception as e:
         await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
         return
-    if not data[str(role.id)]['icon']:
-        await ctx.respond('This role\'s icon can\'t be changed.', ephemeral=True)
+    try:
+        await role.edit(unicode_emoji=value)
+        await ctx.respond('Icon changed!', ephemeral=True)
         return
-    if ctx.interaction.guild.emoji_limit < 150:
-        await ctx.respond('This server doesn\'t have role icons unlocked.', ephemeral=True)
+    except discord.errors.Forbidden:
+        await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
         return
-    if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/')):
-        await ctx.respond('Images must be jp(e)g, png, or webp and hosted on Discord.')
+    except discord.errors.HTTPException:
+        if not data[str(role.id)]['icon']:
+            await ctx.respond('This role\'s icon can\'t be changed.', ephemeral=True)
+            return
+        if value.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png', 'webp'] and (value.startswith('https://cdn.discordapp.com/') or value.startswith('https://media.discordapp.net/')):
+            await ctx.respond('Images must be jp(e)g, png, or webp and hosted on Discord.')
+            return
+        with requests.get(value) as file:
+            if len(file.content) > 256000:
+                await ctx.respond('Image is too large - role icons must be 256kb or lower.', ephemeral=True)
+                return
+            try:
+                await role.edit(icon=file.content)
+                await ctx.respond('Icon changed!', ephemeral=True)
+                return
+            except discord.errors.Forbidden:
+                await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
+                return
+            except Exception as e:
+                await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
+                return
+    except Exception as e:
+        await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
         return
-    with requests.get(value) as file:
-        if len(file.content) > 256000:
-            await ctx.respond('Image is too large - role icons must be 256kb or lower.', ephemeral=True)
-            return
-        try:
-            await role.edit(icon=file.content)
-            await ctx.respond('Colour changed!', ephemeral=True)
-            return
-        except discord.errors.Forbidden:
-            await ctx.respond(f'This bot is not authorised to change {role}\'s icon!', ephemeral=True)
-            return
-        except Exception as e:
-            await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
-            return
 
 
 @bot.slash_command(name='change_name',
@@ -183,7 +191,7 @@ async def change_icon(ctx: discord.ApplicationContext,
                    )
 async def change_name(ctx: discord.ApplicationContext,
                       role: discord.Role = discord.Option(discord.Role, 'Role to change name of.', name='role'),
-                      name: str = discord.Option(str, 'Text to set as role name.')
+                      name: str = discord.Option(str, 'Text to set as role name.', name='name')
                       ):
     with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json') as file:
         data = json.loads(file.read())
@@ -265,7 +273,7 @@ async def add_role(ctx: discord.ApplicationContext,
         data[role.id]['name'] = False
         with open(f'{filestruct}{ctx.interaction.guild.id}/roles.json', 'w') as file:
             file.write(json.dumps(data))
-        await ctx.respond('Role configured!')
+        await ctx.respond('Role configured!', ephemeral=True)
         return
     except Exception as e:
         await ctx.respond(f'Uncaught exception ``{e}`` of type ``{type(e)}``', ephemeral=True)
@@ -366,8 +374,10 @@ def master_perms(ctx: discord.ApplicationContext, role: discord.Role):
         return True
     with open(f'{filestruct}{ctx.interaction.guild.id}/masters.json', 'r') as file:
         masters = json.loads(file.read())
+    if ctx.interaction.user.id in masters['users']:
+        return True
     for role in ctx.interaction.user.roles:
-        if role.id in masters:
+        if role.id in masters['roles']:
             return True
     return False
 
